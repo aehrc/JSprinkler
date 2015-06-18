@@ -25,6 +25,7 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.lang3.time.StopWatch;
 import org.hl7.fhir.instance.client.ClientUtils;
 import org.hl7.fhir.instance.client.EFhirClientException;
 import org.hl7.fhir.instance.client.FHIRSimpleClient;
@@ -112,7 +113,10 @@ public class TestScript {
 
         ns = root.getNamespace();
 
-        System.out.println("Running: " + getChildValue(root, "name"));
+        System.out.println("Running Test Script: " + getChildValue(root, "name"));
+
+        final StopWatch sw = new StopWatch();
+        sw.start();
 
         for (Element child: root.getChildren()) {
             if (doSetup && "setup".equals(child.getName())) {
@@ -122,8 +126,10 @@ public class TestScript {
                 executeSuite(child);
             }
         }
+        sw.stop();
 
-        System.out.println("Tests: " + total +" Failures: " + fail);
+        System.out.println("Finish Test Script. Elapsed Time = " + sw);
+        System.out.println("Tests: " + total +"\tPassed: " + (total-fail) +"\tFailed: " + fail);
 
         return fail;
     }
@@ -146,10 +152,14 @@ public class TestScript {
 
 
     private void executeSuite(Element element) {
-        System.out.println(getChildValue(element, "name"));
+        println("Execute Suite " + getChildValue(element, "name"));
         for (Element child: element.getChildren()) {
-            if ("test".equals(child.getName())) {
+            final String name = child.getName();
+
+            if ("test".equals(name)) {
                 executeTest(child);
+            } else if (!"name".equals(name) && !"description".equals(name)) {
+                throw new IllegalArgumentException("Unexpected content: " + name);
             }
         }
     }
@@ -157,12 +167,15 @@ public class TestScript {
     private void executeTest(Element element) {
         final String id = element.getAttributeValue("id");
         if (testId == null || testId.equals(id)) {
-            System.out.println("Test " + getChildValue(element, "name") + (id == null ? "" : "["+id+"]"));
+            print("  Test " + getChildValue(element, "name") + (id == null ? "" : "["+id+"]") + ": ");
             total++;
 
             for (Element child: element.getChildren()) {
-                if ("operation".equals(child.getName())) {
+                final String name = child.getName();
+                if ("operation".equals(name)) {
                     executeOperation(child);
+                } else if (!"name".equals(name) && !"description".equals(name)) {
+                    throw new IllegalArgumentException("Unexpected content: " + name);
                 }
             }
 
@@ -170,82 +183,97 @@ public class TestScript {
     }
 
     private void executeOperation(Element element) {
+        final StopWatch sw = new StopWatch();
+        sw.start();
+
         try {
             final String url = getChildValue(element, "url");
             final Element input = element.getChild("input", ns);
 
             final ResourceRequest<Resource> request;
+            Resource result;
 
-            if (input != null) {
-                final Parameters paramList = (Parameters) getInnerResource(input);
-                final String name = getChildValue(element, "name");
+            try {
+                if (input != null) {
+                    final Parameters paramList = (Parameters) getInnerResource(input);
 
-                final byte[] bytes = new XmlParser().composeBytes(paramList);
-                final URI uri = URI.create(endpoint+"/"+url+ (name == null ? "" : "$"+name));
+                    final byte[] bytes = new XmlParser().composeBytes(paramList);
+                    final URI uri = URI.create(endpoint+"/"+url);
 
-                System.err.println(uri);
+                    System.err.println(uri);
 
-                request = ClientUtils.issuePostRequest(uri, bytes, client.getPreferredResourceFormat(), null);
+                    request = ClientUtils.issuePostRequest(uri, bytes, client.getPreferredResourceFormat(), null);
+                    result = request.getPayload();
+                } else {
+                    final URI uri = URI.create(endpoint+"/"+url);
 
-            } else {
-                final URI uri = URI.create(endpoint+"/"+url);
-
-                request = ClientUtils.issueGetResourceRequest(uri, client.getPreferredResourceFormat(), null);
-                request.addErrorStatus(410);        // gone
-                request.addErrorStatus(404);        // unknown
-                request.addSuccessStatus(200);      // ok
-            }
-
-            if (request.isUnsuccessfulRequest()) {
-                throw new EFhirClientException("Server returned error code " + request.getHttpStatus(), (OperationOutcome) request.getPayload());
-            }
-
-            final Resource result = request.getPayload();
-
-            Element output = element.getChild("output", ns);
-            Element rules = null;
-            for (Element child: output.getChildren()) {
-                if (rules == null && "rules".equals(child.getName())) {
-                    rules = child;
-                } else if (rules != null) {
-                    output = child;
-                    break;
+                    request = ClientUtils.issueGetResourceRequest(uri, client.getPreferredResourceFormat(), null);
+                    result = request.getPayload();
+                }
+            } catch (EFhirClientException e) {
+                if (e.hasServerErrors() && e.getServerErrors().size() == 1) {
+                    result = e.getServerErrors().get(0);
+                } else {
+                    throw e;
                 }
             }
-            final Resource expected = getOuterResource(output);
+            sw.stop();
 
-            final ResourceComparer comp = new ResourceComparer(rules.getAttributeValue("value"), expected, result);
-            if (comp.execute()) {
-                System.out.println("Passed");
-            } else {
-                fail++;
-                System.out.println("Failed");
-                for (String err: comp.getErrors()) {
-                    System.err.println("\t"+err);
-                }
-            }
-        } catch (EFhirClientException e) {
-            fail++;
-            System.out.println("Failed: " + e.getMessage());
-        } catch (URISyntaxException e) {
-            fail++;
-            System.out.println("Failed: " + e.getMessage());
+//            if (request.isUnsuccessfulRequest()) {
+//                throw new EFhirClientException("Server returned error code " + request.getHttpStatus(), (OperationOutcome) request.getPayload());
+//            }
+
+            checkResult(element, result, sw);
         } catch (Exception e) {
+            if (!sw.isStopped()) {
+                sw.stop();
+            }
             fail++;
-            System.out.println("Failed: " + e.getMessage());
+            println("Failed (" + sw + ")\n    " + e.getMessage());
+        }
+    }
+
+    protected void checkResult(Element element, final Resource result, StopWatch sw) {
+        Element output = element.getChild("output", ns);
+        Element rules = null;
+        for (Element child: output.getChildren()) {
+            if (rules == null && "rules".equals(child.getName())) {
+                rules = child;
+            } else if (rules != null) {
+                output = child;
+                break;
+            }
+        }
+        final Resource expected = getOuterResource(output);
+
+        final ResourceComparer comp = new ResourceComparer(rules.getAttributeValue("value"), expected, result);
+        if (comp.execute()) {
+            println("Passed (" + sw + ")");
+        } else {
+            fail++;
+            println("Failed (" + sw + ")");
+            for (String err: comp.getErrors()) {
+                println("    "+err);
+            }
         }
     }
 
     private void executeSetup(Element element) {
+        println("Setup");
         for (Element child: element.getChildren()) {
             if ("action".equals(child.getName())) {
+                final StopWatch sw = new StopWatch();
+                sw.start();
+                print(" " + getChildValue(child, "name"));
                 executeSetupAction(child);
+                sw.stop();
+                println(" (" + sw + ")");
             }
         }
     }
 
     private void executeSetupAction(Element element) {
-        System.out.println(getChildValue(element, "name"));
+        println(getChildValue(element, "name"));
         for (Element child: element.getChildren()) {
             if ("update".equals(child.getName())) {
                 executeUpdate(child);
@@ -267,7 +295,8 @@ public class TestScript {
 
     private static Resource getOuterResource(Element element) {
         try {
-            return new XmlParser().parse(new XMLOutputter().outputString(element));
+            final String xmlString = new XMLOutputter().outputString(element);
+            return new XmlParser().parse(xmlString);
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage(), e);
         }
@@ -301,6 +330,14 @@ public class TestScript {
         final Element child = parent
                 .getChild(name, ns);
         return child == null ? "" : child.getAttributeValue("value");
+    }
+
+    private void print(final String line) {
+        System.out.print(line);
+    }
+
+    private void println(final String line) {
+        System.out.println(line);
     }
 
 }
