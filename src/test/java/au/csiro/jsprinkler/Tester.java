@@ -57,9 +57,9 @@ public class Tester {
 //            assertEquals(0, script.getFail());
         }
 
-        System.out.println("\nEndpoint\tPassed\tFailed");
+        System.out.println("\nPassed\tFailed\tEndpoint");
         for (int i = 0; i < ENDPOINT.length; i++) {
-            System.out.println(ENDPOINT[i] + "\t" + (nTests - failed.get(i)) + "\t" + failed.get(i));
+            System.out.println((nTests - failed.get(i)) + "\t" + failed.get(i) + "\t" + ENDPOINT[i]);
         }
     }
 
