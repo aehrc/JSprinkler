@@ -18,8 +18,9 @@
 
 package au.csiro.jsprinkler;
 
-import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.Reader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
@@ -105,10 +106,13 @@ public class TestScript {
     }
 
     public int run(String testFile) throws JDOMException, IOException {
-        SAXBuilder builder = new SAXBuilder();
-        Document doc = builder.build(new File(testFile));
+        return run(new FileReader(testFile));
+    }
 
-        Element root = doc.getRootElement();
+    public int run(Reader testFile) throws JDOMException, IOException {
+        final Document doc = new SAXBuilder().build(testFile);
+
+        final Element root = doc.getRootElement();
         if (!"TestScript".equals(root.getName()) || !"http://hl7.org/fhir".equals(root.getNamespaceURI())) {
             throw new IllegalArgumentException("Unrecognised start to script: expected TestScript :: http://hl7.org/fhir");
         }
@@ -197,10 +201,11 @@ public class TestScript {
             final String url = getChildValue(element, "url");
             final Element input = element.getChild("input", ns);
 
-            final ResourceRequest<Resource> request;
             Resource result;
+            int actualResponse = -1;
 
             try {
+                final ResourceRequest<Resource> request;
                 if (input != null) {
                     final Parameters paramList = (Parameters) getInnerResource(input);
 
@@ -208,13 +213,13 @@ public class TestScript {
                     final URI uri = URI.create(endpoint+"/"+url);
 
                     request = ClientUtils.issuePostRequest(uri, bytes, client.getPreferredResourceFormat(), null);
-                    result = request.getPayload();
                 } else {
                     final URI uri = URI.create(endpoint+"/"+url);
 
                     request = ClientUtils.issueGetResourceRequest(uri, client.getPreferredResourceFormat(), null);
-                    result = request.getPayload();
                 }
+                actualResponse = request.getHttpStatus();
+                result = request.getPayload();
             } catch (EFhirClientException e) {
                 if (e.hasServerErrors() && e.getServerErrors().size() == 1) {
                     result = e.getServerErrors().get(0);
@@ -224,11 +229,7 @@ public class TestScript {
             }
             sw.stop();
 
-//            if (request.isUnsuccessfulRequest()) {
-//                throw new EFhirClientException("Server returned error code " + request.getHttpStatus(), (OperationOutcome) request.getPayload());
-//            }
-
-            checkResult(element, result, sw);
+            checkResult(element, result, actualResponse, sw);
         } catch (Exception e) {
             if (!sw.isStopped()) {
                 sw.stop();
@@ -238,7 +239,21 @@ public class TestScript {
         }
     }
 
-    protected void checkResult(Element element, final Resource result, StopWatch sw) {
+    protected boolean checkRange(String range, int code) {
+        if (range.startsWith("!")) {
+            return !checkRange(range.substring(1), code);
+        } else if (range.endsWith("xx")) {
+            int lower = Integer.parseInt(range.substring(0, 1)) * 100;
+            int upper = lower + 100;
+            return lower <= code && code < upper;
+        } else {
+            return code == Integer.parseInt(range);
+        }
+    }
+
+    protected void checkResult(Element element, final Resource result, int responseStatus, StopWatch sw) {
+        final String expectedResponse = getChildValue(element, "responseCode");
+
         Element output = element.getChild("output", ns);
         Element rules = null;
         for (Element child: output.getChildren()) {
@@ -253,13 +268,18 @@ public class TestScript {
 
         final ResourceComparer comp = new ResourceComparer(rules.getAttributeValue("value"), expected, result);
         if (comp.execute()) {
-            println("Passed (" + sw + ")");
-        } else {
-            fail.add(currentTest);
-            println("Failed (" + sw + ")");
-            for (String err: comp.getErrors()) {
-                println("    "+err);
+            if (checkRange(expectedResponse, responseStatus)) {
+                println("Passed (" + sw + ")");
+                return;
+            } else {
+                comp.getErrors().add(0, "Response code mismatch - expected " + expectedResponse + " got " + responseStatus);
             }
+        }
+
+        fail.add(currentTest);
+        println("Failed (" + sw + ")");
+        for (String err: comp.getErrors()) {
+            println("    "+err);
         }
     }
 
