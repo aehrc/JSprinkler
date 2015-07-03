@@ -3390,7 +3390,7 @@
             </parameter>
           </Parameters>
         </input>
-        <responseCode value="!2xx"/>
+        <responseCode value="200"/>
         <output>
           <rules value="min"/> <!-- what is returned must contain what is specified here, but can contain other things-->
           <Parameters xmlns="http://hl7.org/fhir">
@@ -3456,7 +3456,7 @@
             </parameter>
           </Parameters>
         </input>
-        <responseCode value="!2xx"/>
+        <responseCode value="200"/>
         <output>
           <rules value="min"/> <!-- what is returned must contain what is specified here, but can contain other things-->
           <Parameters xmlns="http://hl7.org/fhir">
@@ -3526,7 +3526,7 @@
             </parameter>
           </Parameters>
         </input>
-        <responseCode value="!2xx"/>
+        <responseCode value="200"/>
         <output>
           <rules value="min"/> <!-- what is returned must contain what is specified here, but can contain other things-->
           <Parameters xmlns="http://hl7.org/fhir">
