@@ -38,14 +38,15 @@ public class Tester {
 
     @Test
     public void testScript() throws Exception {
-        List<Integer> failed = new ArrayList<>();
+        final int nTests = 55;
+        final List<Integer> failed = new ArrayList<>();
 
         for (String server: ENDPOINT) {
             System.out.println("Endpoint: " + server);
             TestScript script = new TestScript(server);
             script.run(SCRIPT);
 
-            assertEquals(55, script.getTotal());
+            assertEquals(nTests, script.getTotal());
 
 //            for (String f: script.getFailedTests()) {
 //                System.err.println(f);
@@ -55,8 +56,10 @@ public class Tester {
 
 //            assertEquals(0, script.getFail());
         }
+
+        System.out.println("\nEndpoint\tPassed\tFailed");
         for (int i = 0; i < ENDPOINT.length; i++) {
-            System.out.println("Endpoint:\t" + ENDPOINT[i] + "\t" + failed.get(i));
+            System.out.println(ENDPOINT[i] + "\t" + (nTests - failed.get(i)) + "\t" + failed.get(i));
         }
     }
 
