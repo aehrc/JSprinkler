@@ -44,7 +44,8 @@ public class Tester {
 
         for (String server: ENDPOINT) {
             System.out.println("Endpoint: " + server);
-            TestScript script = new TestScript(server);
+
+            final TestScript script = new TestScript(server);
             script.run(new InputStreamReader(getClass().getResourceAsStream(SCRIPT)));
 
             assertEquals(nTests, script.getTotal());
@@ -55,10 +56,10 @@ public class Tester {
 
             failed.add(script.getFail());
 
-//            assertEquals(0, script.getFail());
+            System.out.println();
         }
 
-        System.out.println("\nPassed\tFailed\tEndpoint");
+        System.out.println("Passed\tFailed\tEndpoint");
         for (int i = 0; i < ENDPOINT.length; i++) {
             System.out.println((nTests - failed.get(i)) + "\t" + failed.get(i) + "\t" + ENDPOINT[i]);
         }
