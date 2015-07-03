@@ -57,11 +57,13 @@ public class TestScript {
 
     private int total = 0;
 
-    private int fail = 0;
+    private List<String> fail = new ArrayList<>();
 
     private Namespace ns;
 
     private boolean doSetup = true;
+
+    private String currentTest;
 
     public static void main(String[] args) throws Exception {
         final List<String> testFiles = new ArrayList<>();
@@ -129,9 +131,9 @@ public class TestScript {
         sw.stop();
 
         System.out.println("Finish Test Script. Elapsed Time = " + sw);
-        System.out.println("Tests: " + total +"\tPassed: " + (total-fail) +"\tFailed: " + fail);
+        System.out.println("Tests: " + total +"\tPassed: " + (total-fail.size()) +"\tFailed: " + fail.size());
 
-        return fail;
+        return fail.size();
     }
 
     public int getTotal() {
@@ -139,6 +141,10 @@ public class TestScript {
     }
 
     public int getFail() {
+        return fail.size();
+    }
+
+    public List<String> getFailedTests() {
         return fail;
     }
 
@@ -167,7 +173,8 @@ public class TestScript {
     private void executeTest(Element element) {
         final String id = element.getAttributeValue("id");
         if (testId == null || testId.equals(id)) {
-            print("  Test " + getChildValue(element, "name") + (id == null ? "" : "["+id+"]") + ": ");
+            currentTest = getChildValue(element, "name") + (id == null ? "" : " ["+id+"]");
+            print("  Test " + currentTest + ": ");
             total++;
 
             for (Element child: element.getChildren()) {
@@ -200,8 +207,6 @@ public class TestScript {
                     final byte[] bytes = new XmlParser().composeBytes(paramList);
                     final URI uri = URI.create(endpoint+"/"+url);
 
-                    System.err.println(uri);
-
                     request = ClientUtils.issuePostRequest(uri, bytes, client.getPreferredResourceFormat(), null);
                     result = request.getPayload();
                 } else {
@@ -228,8 +233,8 @@ public class TestScript {
             if (!sw.isStopped()) {
                 sw.stop();
             }
-            fail++;
-            println("Failed (" + sw + ")\n    " + e.getMessage());
+            fail.add(currentTest);
+            println("Failed (" + sw + ")\n    [" +e.getClass().getSimpleName()+"] "+ e.getMessage());
         }
     }
 
@@ -250,7 +255,7 @@ public class TestScript {
         if (comp.execute()) {
             println("Passed (" + sw + ")");
         } else {
-            fail++;
+            fail.add(currentTest);
             println("Failed (" + sw + ")");
             for (String err: comp.getErrors()) {
                 println("    "+err);
@@ -265,7 +270,11 @@ public class TestScript {
                 final StopWatch sw = new StopWatch();
                 sw.start();
                 print(" " + getChildValue(child, "name"));
-                executeSetupAction(child);
+                try {
+                    executeSetupAction(child);
+                } catch (EFhirClientException e) {
+                    print(" Failed " + e.getMessage());
+                }
                 sw.stop();
                 println(" (" + sw + ")");
             }
@@ -273,7 +282,6 @@ public class TestScript {
     }
 
     private void executeSetupAction(Element element) {
-        println(getChildValue(element, "name"));
         for (Element child: element.getChildren()) {
             if ("update".equals(child.getName())) {
                 executeUpdate(child);

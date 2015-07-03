@@ -23,6 +23,8 @@ import java.util.List;
 
 import org.hl7.fhir.instance.model.Base;
 import org.hl7.fhir.instance.model.BooleanType;
+import org.hl7.fhir.instance.model.OperationOutcome;
+import org.hl7.fhir.instance.model.OperationOutcome.OperationOutcomeIssueComponent;
 import org.hl7.fhir.instance.model.Property;
 import org.hl7.fhir.instance.model.Resource;
 
@@ -55,7 +57,19 @@ public class ResourceComparer {
         }
 
         if (!actual.getResourceType().equals(expected.getResourceType())) {
-            errors.add("Found a Resource of type " + actual.getResourceType() + ", but expected " + expected.getResourceType());
+            String detail = "";
+            if (actual instanceof OperationOutcome) {
+                try {
+                    final OperationOutcome outcome = (OperationOutcome) actual;
+                    for (OperationOutcomeIssueComponent issue: outcome.getIssue()) {
+                        detail = ": " + detail + issue.getDetails();
+                    }
+//                    new NarrativeGenerator("", new WorkerContext()).generate(outcome);
+//                    detail = ": " + outcome.getText().getDiv().getContent();
+                } catch (Exception e) {
+                }
+            }
+            errors.add("Found a Resource of type " + actual.getResourceType() + ", but expected " + expected.getResourceType() + detail);
             return false;
         }
 
