@@ -2670,7 +2670,7 @@
       <description value="Check that the code {http://hl7.org/fhir/patient-contact-relationship}emergencyX is not in the value set"/>
       <operation>
         <url value="ValueSet/extensional-case-1/$validate?system=http://hl7.org/fhir/patient-contact-relationship&amp;code=emergencyX"/>
-        <responseCode value="!2xx"/>
+        <responseCode value="200"/>
         <output>
           <rules value="min"/> <!-- what is returned must contain what is specified here, but can contain other things-->
           <Parameters xmlns="http://hl7.org/fhir">
