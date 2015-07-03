@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.hl7.fhir.instance.model.Base;
 import org.hl7.fhir.instance.model.BooleanType;
+import org.hl7.fhir.instance.model.Extension;
 import org.hl7.fhir.instance.model.OperationOutcome;
 import org.hl7.fhir.instance.model.OperationOutcome.OperationOutcomeIssueComponent;
 import org.hl7.fhir.instance.model.Property;
@@ -140,13 +141,20 @@ public class ResourceComparer {
 
     protected <T extends Base> boolean compareBaseObjects(String name, List<T> expected, List<T> actual) {
         boolean ok = true, suffix = false;
-        if (expected.size() != actual.size()) {
-            errors.add(name + " - Differing numbers of children: expected " + expected.size() + ", found " + actual.size());
+        int minExpected = expected.size();
+        for (T o: expected) {
+            if (o instanceof Extension) {
+                minExpected--;
+            }
+        }
+        if (minExpected > actual.size()) {
+            errors.add(name + " - Differing numbers of children: expected " + minExpected + ", found " + actual.size());
+
             ok = false;
             suffix = true;
         }
 
-        int min = Math.min(expected.size(), actual.size());
+        int min = Math.min(minExpected, actual.size());
         for (int i = 0; i < min; i++) {
             ok &= compareBase(name+(suffix?"["+i+"]":""), expected.get(i), actual.get(i));
         }
