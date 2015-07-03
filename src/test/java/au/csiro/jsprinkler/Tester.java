@@ -2,6 +2,7 @@ package au.csiro.jsprinkler;
 
 import static org.junit.Assert.assertEquals;
 
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +24,7 @@ public class Tester {
 //        "http://52.4.97.158:8080/ontoserver/resources/fhir",
     };
 
-    private static final String SCRIPT = "/Users/law223/Downloads/tx_test_script.xml";
+    private static final String SCRIPT = "/tx_test_script.xml";
 
     @Test
     @Ignore("For speed, don't bother testing main API")
@@ -44,7 +45,7 @@ public class Tester {
         for (String server: ENDPOINT) {
             System.out.println("Endpoint: " + server);
             TestScript script = new TestScript(server);
-            script.run(SCRIPT);
+            script.run(new InputStreamReader(getClass().getResourceAsStream(SCRIPT)));
 
             assertEquals(nTests, script.getTotal());
 
